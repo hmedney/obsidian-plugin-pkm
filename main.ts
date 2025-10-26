@@ -113,8 +113,8 @@ export default class QuickNotePlugin extends Plugin {
 				// Ensure folder exists
 				await this.ensureFolderExists(folderPath);
 
-				// Get note content (from template or empty)
-				const content = await this.getNoteContent();
+				// Get note content (from template or empty) with frontmatter
+				const content = await this.getNoteContent(title, dateStr);
 
 				// Create the note
 				const file = await this.app.vault.create(filePath, content);
@@ -144,7 +144,9 @@ export default class QuickNotePlugin extends Plugin {
 		}
 	}
 
-	async getNoteContent(): Promise<string> {
+	async getNoteContent(title: string, date: string): Promise<string> {
+		let content = '';
+
 		// If template path is configured, try to load it
 		if (this.settings.templatePath) {
 			const templateFile = this.app.vault.getAbstractFileByPath(
@@ -152,14 +154,48 @@ export default class QuickNotePlugin extends Plugin {
 			);
 
 			if (templateFile instanceof TFile) {
-				return await this.app.vault.read(templateFile);
+				content = await this.app.vault.read(templateFile);
 			} else {
 				console.warn(`Template file not found: ${this.settings.templatePath}`);
 			}
 		}
 
-		// Return empty content if no template or template not found
-		return '';
+		// Add frontmatter with date and title
+		return this.addFrontmatter(content, title, date);
+	}
+
+	addFrontmatter(content: string, title: string, date: string): string {
+		// Check if content already has frontmatter
+		const hasFrontmatter = content.trimStart().startsWith('---');
+
+		if (hasFrontmatter) {
+			// Extract existing frontmatter and content
+			const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+			if (match) {
+				const existingFrontmatter = match[1];
+				const bodyContent = match[2];
+
+				// Check if date or title already exist in frontmatter
+				const hasDate = /^date:/m.test(existingFrontmatter);
+				const hasTitle = /^title:/m.test(existingFrontmatter);
+
+				let newFrontmatter = existingFrontmatter;
+
+				// Add missing fields
+				if (!hasDate) {
+					newFrontmatter = `date: ${date}\n${newFrontmatter}`;
+				}
+				if (!hasTitle) {
+					newFrontmatter = `title: ${title}\n${newFrontmatter}`;
+				}
+
+				return `---\n${newFrontmatter}\n---\n${bodyContent}`;
+			}
+		}
+
+		// No existing frontmatter, create new one
+		const frontmatter = `---\ntitle: ${title}\ndate: ${date}\n---\n\n`;
+		return frontmatter + content;
 	}
 
 	async loadSettings() {
