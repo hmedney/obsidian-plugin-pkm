@@ -1,9 +1,9 @@
 {
   "id": "hunter-pkm",
-  "name": "Hunter's Personal Knowledge Management",
+  "name": "Hunter's PKM - Quick Notes",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
-  "description": "Support Hunter's Personal Knowledge Management workflow",
+  "description": "Quick note capture with date-stamped titles and automatic folder organization (YYYY/MM/)",
   "author": "Hunter Medney",
   "authorUrl": "https://github.com/hmedney",
   "isDesktopOnly": false
