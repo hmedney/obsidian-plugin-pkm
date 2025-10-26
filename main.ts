@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, normalizePath } from 'obsidian';
+import { AbstractInputSuggest, App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, normalizePath } from 'obsidian';
 
 interface QuickNoteSettings {
 	baseFolder: string;
@@ -35,7 +35,8 @@ export default class QuickNotePlugin extends Plugin {
 	}
 
 	async getPastNoteTitles(): Promise<string[]> {
-		const titles = new Set<string>();
+		// Map of title -> most recent date (YYYY-MM-DD format)
+		const titleDates = new Map<string, string>();
 		const baseFolder = this.app.vault.getAbstractFileByPath(
 			normalizePath(this.settings.baseFolder)
 		);
@@ -44,18 +45,24 @@ export default class QuickNotePlugin extends Plugin {
 			return [];
 		}
 
-		// Regex to match date prefix: YYYY-MM-DD
-		const datePattern = /^\d{4}-\d{2}-\d{2}\s+/;
+		// Regex to match and extract date prefix: YYYY-MM-DD
+		const datePattern = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/;
 
 		const extractTitles = (folder: TFolder) => {
 			for (const child of folder.children) {
 				if (child instanceof TFile && child.extension === 'md') {
-					// Extract title by removing date prefix
 					const fileName = child.basename;
-					const titleMatch = fileName.replace(datePattern, '');
-					if (titleMatch && titleMatch !== fileName) {
-						// Only add if date prefix was found and removed
-						titles.add(titleMatch);
+					const match = fileName.match(datePattern);
+
+					if (match) {
+						const date = match[1]; // YYYY-MM-DD
+						const title = match[2]; // Everything after date
+
+						// Keep the most recent date for each title
+						const existingDate = titleDates.get(title);
+						if (!existingDate || date > existingDate) {
+							titleDates.set(title, date);
+						}
 					}
 				} else if (child instanceof TFolder) {
 					// Recursively search subfolders
@@ -68,8 +75,10 @@ export default class QuickNotePlugin extends Plugin {
 			extractTitles(baseFolder);
 		}
 
-		// Return sorted array for better UX
-		return Array.from(titles).sort((a, b) => a.localeCompare(b));
+		// Sort by date descending (most recent first), then return just titles
+		return Array.from(titleDates.entries())
+			.sort((a, b) => b[1].localeCompare(a[1])) // Compare dates, reverse order
+			.map(entry => entry[0]); // Extract just the titles
 	}
 
 	async createQuickNote() {
@@ -162,20 +171,46 @@ export default class QuickNotePlugin extends Plugin {
 	}
 }
 
+class TitleSuggest extends AbstractInputSuggest<string> {
+	private pastTitles: string[];
+
+	constructor(app: App, inputEl: HTMLInputElement, pastTitles: string[]) {
+		super(app, inputEl);
+		this.pastTitles = pastTitles;
+	}
+
+	getSuggestions(query: string): string[] {
+		// Don't show suggestions for empty input
+		if (!query || query.trim().length === 0) {
+			return [];
+		}
+
+		const lowerQuery = query.toLowerCase();
+		return this.pastTitles.filter(title =>
+			title.toLowerCase().includes(lowerQuery)
+		);
+	}
+
+	renderSuggestion(title: string, el: HTMLElement): void {
+		el.setText(title);
+	}
+
+	selectSuggestion(title: string, evt: MouseEvent | KeyboardEvent): void {
+		this.setValue(title);
+		this.close();
+	}
+}
+
 class TitleInputModal extends Modal {
 	onSubmit: (title: string) => void;
 	titleInput: HTMLInputElement;
-	suggestionsContainer: HTMLDivElement;
+	titleSuggest: TitleSuggest;
 	pastTitles: string[];
-	filteredSuggestions: string[];
-	selectedIndex: number;
 
 	constructor(app: App, pastTitles: string[], onSubmit: (title: string) => void) {
 		super(app);
 		this.pastTitles = pastTitles;
 		this.onSubmit = onSubmit;
-		this.filteredSuggestions = [];
-		this.selectedIndex = -1;
 	}
 
 	onOpen() {
@@ -184,177 +219,39 @@ class TitleInputModal extends Modal {
 
 		contentEl.createEl('h2', { text: 'Create quick note' });
 
-		// Create input container with relative positioning for dropdown
-		const inputWrapper = contentEl.createDiv();
-		inputWrapper.style.position = 'relative';
+		const inputContainer = contentEl.createDiv();
+		inputContainer.createEl('label', { text: 'Note title:' });
 
-		inputWrapper.createEl('label', { text: 'Note title:', cls: 'setting-item-name' });
-
-		this.titleInput = inputWrapper.createEl('input', {
+		this.titleInput = inputContainer.createEl('input', {
 			type: 'text',
 			placeholder: 'Enter note title...'
 		});
 		this.titleInput.style.width = '100%';
-		this.titleInput.style.marginTop = '8px';
-		this.titleInput.style.padding = '8px';
-		this.titleInput.style.boxSizing = 'border-box';
 
-		// Create suggestions dropdown
-		this.suggestionsContainer = inputWrapper.createDiv();
-		this.suggestionsContainer.style.position = 'absolute';
-		this.suggestionsContainer.style.width = '100%';
-		this.suggestionsContainer.style.maxHeight = '200px';
-		this.suggestionsContainer.style.overflowY = 'auto';
-		this.suggestionsContainer.style.backgroundColor = 'var(--background-primary)';
-		this.suggestionsContainer.style.border = '1px solid var(--background-modifier-border)';
-		this.suggestionsContainer.style.borderRadius = '4px';
-		this.suggestionsContainer.style.marginTop = '2px';
-		this.suggestionsContainer.style.display = 'none';
-		this.suggestionsContainer.style.zIndex = '1000';
-		this.suggestionsContainer.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+		// Attach autocomplete suggester
+		this.titleSuggest = new TitleSuggest(this.app, this.titleInput, this.pastTitles);
 
-		// Input event listener for filtering
-		this.titleInput.addEventListener('input', () => {
-			this.updateSuggestions();
-		});
-
-		// Keyboard navigation
+		// Handle Enter key to submit form
 		this.titleInput.addEventListener('keydown', (evt: KeyboardEvent) => {
-			if (evt.key === 'ArrowDown') {
-				evt.preventDefault();
-				this.navigateSuggestions(1);
-			} else if (evt.key === 'ArrowUp') {
-				evt.preventDefault();
-				this.navigateSuggestions(-1);
-			} else if (evt.key === 'Enter') {
-				evt.preventDefault();
-				if (this.selectedIndex >= 0 && this.filteredSuggestions.length > 0) {
-					this.selectSuggestion(this.filteredSuggestions[this.selectedIndex]);
-				} else {
-					this.submit();
-				}
-			} else if (evt.key === 'Escape') {
-				evt.preventDefault();
-				this.hideSuggestions();
-			} else if (evt.key === 'Tab' && this.filteredSuggestions.length > 0) {
-				evt.preventDefault();
-				this.selectSuggestion(this.filteredSuggestions[0]);
+			if (evt.key === 'Enter' && !evt.isComposing) {
+				this.submit();
 			}
 		});
 
-		// Focus input
-		this.titleInput.focus();
+		// Delay focus to allow modal to fully render and position
+		setTimeout(() => this.titleInput.focus(), 10);
 
-		// Create button container
-		const buttonContainer = contentEl.createDiv();
-		buttonContainer.style.marginTop = '16px';
-		buttonContainer.style.display = 'flex';
-		buttonContainer.style.justifyContent = 'flex-end';
-		buttonContainer.style.gap = '8px';
+		// Create buttons
+		const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
 
-		// Cancel button
 		const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel' });
 		cancelBtn.addEventListener('click', () => this.close());
 
-		// Create button
 		const createBtn = buttonContainer.createEl('button', {
 			text: 'Create',
 			cls: 'mod-cta'
 		});
 		createBtn.addEventListener('click', () => this.submit());
-	}
-
-	updateSuggestions() {
-		const inputValue = this.titleInput.value.toLowerCase();
-
-		if (!inputValue) {
-			this.hideSuggestions();
-			return;
-		}
-
-		// Filter suggestions based on input
-		this.filteredSuggestions = this.pastTitles.filter(title =>
-			title.toLowerCase().includes(inputValue)
-		);
-
-		if (this.filteredSuggestions.length === 0) {
-			this.hideSuggestions();
-			return;
-		}
-
-		// Clear and rebuild suggestions
-		this.suggestionsContainer.empty();
-		this.selectedIndex = -1;
-
-		this.filteredSuggestions.forEach((suggestion, index) => {
-			const item = this.suggestionsContainer.createDiv();
-			item.textContent = suggestion;
-			item.style.padding = '8px 12px';
-			item.style.cursor = 'pointer';
-			item.style.borderBottom = '1px solid var(--background-modifier-border)';
-
-			// Hover effect
-			item.addEventListener('mouseenter', () => {
-				this.selectedIndex = index;
-				this.highlightSelected();
-			});
-
-			// Click selection
-			item.addEventListener('click', () => {
-				this.selectSuggestion(suggestion);
-			});
-		});
-
-		this.suggestionsContainer.style.display = 'block';
-		this.highlightSelected();
-	}
-
-	navigateSuggestions(direction: number) {
-		if (this.filteredSuggestions.length === 0) return;
-
-		this.selectedIndex += direction;
-
-		// Wrap around
-		if (this.selectedIndex < 0) {
-			this.selectedIndex = this.filteredSuggestions.length - 1;
-		} else if (this.selectedIndex >= this.filteredSuggestions.length) {
-			this.selectedIndex = 0;
-		}
-
-		this.highlightSelected();
-		this.scrollToSelected();
-	}
-
-	highlightSelected() {
-		const items = this.suggestionsContainer.children;
-		for (let i = 0; i < items.length; i++) {
-			const item = items[i] as HTMLElement;
-			if (i === this.selectedIndex) {
-				item.style.backgroundColor = 'var(--background-modifier-hover)';
-			} else {
-				item.style.backgroundColor = '';
-			}
-		}
-	}
-
-	scrollToSelected() {
-		if (this.selectedIndex >= 0) {
-			const selectedItem = this.suggestionsContainer.children[this.selectedIndex] as HTMLElement;
-			if (selectedItem) {
-				selectedItem.scrollIntoView({ block: 'nearest' });
-			}
-		}
-	}
-
-	selectSuggestion(suggestion: string) {
-		this.titleInput.value = suggestion;
-		this.hideSuggestions();
-		this.titleInput.focus();
-	}
-
-	hideSuggestions() {
-		this.suggestionsContainer.style.display = 'none';
-		this.selectedIndex = -1;
 	}
 
 	submit() {
@@ -368,6 +265,7 @@ class TitleInputModal extends Modal {
 	}
 
 	onClose() {
+		this.titleSuggest?.close();
 		const { contentEl } = this;
 		contentEl.empty();
 	}
