@@ -2,31 +2,31 @@
 
 ## Project Overview
 
-This is an Obsidian plugin project designed to support a personal knowledge management (PKM) workflow within Obsidian. The project is currently based on the official Obsidian sample plugin template and is ready for custom feature development.
+This is an Obsidian plugin designed to support a personal knowledge management (PKM) workflow within Obsidian. The plugin provides quick note capture with intelligent autocomplete and automatic organization.
 
-**Status**: Template/Starter Phase - Core PKM features not yet implemented
+**Status**: Active Development - Quick Notes feature implemented and functional
 
 ## Project Metadata
 
 - **Plugin ID**: `hunter-pkm`
-- **Plugin Name**: "Hunter's Personal Knowledge Management"
+- **Plugin Name**: "Hunter's PKM - Quick Notes"
 - **Version**: 1.0.0
 - **Author**: Hunter Medney
 - **Author URL**: https://github.com/hmedney
 - **Minimum Obsidian Version**: 0.15.0
 - **Platform Support**: Desktop & Mobile (`isDesktopOnly: false`)
-- **License**: MIT License (from Dynalist Inc.)
+- **License**: MIT License
 
 ## Technology Stack
 
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Language | TypeScript | 5.9.3 |
-| Runtime | Node.js | v16+ (v18+ recommended) |
-| Package Manager | npm | - |
-| Bundler | esbuild | 0.25.11 |
-| Build Target | ES2018 | CommonJS format |
-| Linting | ESLint + TypeScript ESLint | 8.46.2 |
+| Component       | Technology                 | Version                 |
+| --------------- | -------------------------- | ----------------------- |
+| Language        | TypeScript                 | 5.9.3                   |
+| Runtime         | Node.js                    | v16+ (v18+ recommended) |
+| Package Manager | npm                        | -                       |
+| Bundler         | esbuild                    | 0.25.11                 |
+| Build Target    | ES2018                     | CommonJS format         |
+| Linting         | ESLint + TypeScript ESLint | 8.46.2                  |
 
 ## Directory Structure
 
@@ -49,30 +49,292 @@ obsidian-plugin-pkm/
 └── node_modules/              # Dependencies (git-ignored)
 ```
 
-**Note**: Currently using a flat file structure. For production development, consider refactoring into organized directories (see AGENTS.md for recommendations).
+**Note**: Currently using a flat file structure with all code in main.ts (~260 lines). Future refactoring could separate classes into individual files (see AGENTS.md for recommendations).
 
 ## Current Implementation
 
-The plugin currently contains **sample/template functionality** from the Obsidian plugin starter:
+### Quick Note Capture Feature
 
-### Features Implemented (Template Code)
+The plugin implements a streamlined workflow for creating date-stamped, topic-organized notes:
 
-1. **Ribbon Icon**: Dice icon in left sidebar with click handler
-2. **Status Bar Item**: Custom text display in bottom status bar
-3. **Commands** (3 registered):
-   - `open-sample-modal-simple`: Opens a simple modal dialog
-   - `sample-editor-command`: Edits selected text in current editor
-   - `open-sample-modal-complex`: Opens modal with conditional logic
-4. **DOM Event Listener**: Global click event logger
-5. **Interval Timer**: Console logging every 5 minutes
-6. **Settings Tab**: Plugin settings interface with one example setting
-7. **Settings Persistence**: Uses Obsidian's `loadData()` and `saveData()` API
+**Core Functionality:**
+
+1. **One-Click Note Creation**: Ribbon icon, command palette, or hotkey
+2. **Smart Title Input**: Modal dialog with intelligent autocomplete
+3. **Automatic Organization**: Notes filed in YYYY/MM/ folder structure
+4. **Template Support**: Optional template file for consistent note structure
+5. **Duplicate Detection**: Opens existing note if same title+date already exists
+
+### User Workflow
+
+1. User triggers note creation (ribbon icon, command palette, or hotkey)
+2. Modal appears with title input and autocomplete suggestions
+3. User types title (autocomplete suggests previously used titles, sorted by recency)
+4. User presses Enter or clicks "Create"
+5. Plugin creates note: `{baseFolder}/YYYY/MM/YYYY-MM-DD Title.md`
+6. Note opens in editor, ready for content
+
+### Features Implemented
+
+**1. Quick Note Modal** (TitleInputModal)
+
+- Clean input dialog with title field
+- Enter key or Create button submits
+- Escape or Cancel button closes modal
+- Input field spans full modal width
+
+**2. Intelligent Autocomplete** (TitleSuggest)
+
+- **Type-ahead suggestions**: Shows past note titles as you type
+- **Recency sorting**: Most recently used titles appear first
+- **Keyboard navigation**: Arrow keys, Enter, Escape
+- **Mouse interaction**: Click or hover to select
+- **No suggestions on empty input**: Dropdown only appears when typing
+- **Built with AbstractInputSuggest**: Uses Obsidian's native suggestion API
+
+**3. Automatic Organization**
+
+- **Folder structure**: `{baseFolder}/YYYY/MM/`
+- **Filename format**: `YYYY-MM-DD Title.md`
+- **Auto-folder creation**: Creates year/month folders if they don't exist
+- **Configurable base folder**: Default "Notes", user-customizable
+
+**4. Template Support**
+
+- **Optional template path**: User specifies template file in settings
+- **Automatic application**: Template content applied to new notes
+- **Graceful fallback**: Empty note if template not found or not configured
+
+**5. Duplicate Handling**
+
+- **Detection**: Checks if file with same date+title already exists
+- **Behavior**: Opens existing note instead of creating duplicate
+- **User notification**: Notice displays when opening existing note
+
+**6. Multiple Access Methods**
+
+- **Ribbon icon** (`file-plus`): Click icon in left sidebar
+- **Command palette**: "Create quick note" command
+- **Hotkey**: User can assign custom keyboard shortcut in Obsidian settings
 
 ### Main Classes/Components
 
-- `SamplePlugin` (extends `Plugin`) - Main plugin class in main.ts:1
-- `SampleModal` (extends `Modal`) - Simple modal implementation in main.ts:77
-- `SampleSettingTab` (extends `PluginSettingTab`) - Settings UI in main.ts:88
+**QuickNotePlugin** (extends `Plugin`) - Main plugin class (main.ts:13-163)
+
+- Manages plugin lifecycle (load/unload)
+- Handles settings persistence
+- Provides core note creation functionality
+- Extracts past note titles for autocomplete
+
+**TitleSuggest** (extends `AbstractInputSuggest<string>`) - Autocomplete provider (main.ts:165-191)
+
+- Filters past titles based on user input
+- Renders suggestion items
+- Handles selection (keyboard and mouse)
+
+**TitleInputModal** (extends `Modal`) - Note creation dialog (main.ts:193-261)
+
+- Displays title input field
+- Attaches autocomplete suggester
+- Handles form submission and validation
+
+**QuickNoteSettingTab** (extends `PluginSettingTab`) - Settings UI (main.ts:263-287)
+
+- Base folder path configuration
+- Template file path configuration
+
+## Implementation Details
+
+### Date and Folder Organization
+
+**Date Format**: `YYYY-MM-DD` (ISO 8601)
+
+- Sortable by string comparison
+- Unambiguous and internationally recognized
+- Example: `2025-10-26`
+
+**Folder Structure**: `{baseFolder}/YYYY/MM/`
+
+- Year folder: 4-digit year (e.g., `2025`)
+- Month subfolder: 2-digit zero-padded month (e.g., `10`)
+- Example path: `Notes/2025/10/2025-10-26 Team Meeting.md`
+
+**Rationale**:
+
+- Keeps notes organized chronologically
+- Prevents folder bloat (max ~31 files per month folder)
+- Easy to navigate in file explorer
+- Year/month structure supports future features (monthly summaries, date range queries)
+
+### Autocomplete Implementation
+
+**Technology Choice**: `AbstractInputSuggest<T>` (Obsidian API v1.4.10+)
+
+**Why AbstractInputSuggest over custom implementation**:
+
+- Native Obsidian suggestion UI (theme-aware, accessible)
+- Built-in keyboard and mouse handling
+- Proper popover positioning and z-index management
+- Automatic ARIA attributes for screen readers
+- ~130 lines of code eliminated vs. manual implementation
+- Future-proof (benefits from Obsidian updates)
+
+**Recency-Based Sorting**:
+
+- Extracts all notes matching `YYYY-MM-DD Title.md` pattern
+- Tracks most recent date for each unique title
+- Sorts by date descending (newest first)
+- Maintains sort order when filtering
+- Example: "Team Meeting" from 2025-10-26 ranks above "Project Ideas" from 2025-10-20
+
+**Implementation** (main.ts:37-82):
+
+```typescript
+// Map of title -> most recent date
+const titleDates = new Map<string, string>();
+
+// Extract date and title from each note
+const datePattern = /^(\d{4}-\d{2}-\d{2})\s+(.+)$/;
+const match = fileName.match(datePattern);
+if (match) {
+	const date = match[1];
+	const title = match[2];
+
+	// Keep most recent date for each title
+	if (!existingDate || date > existingDate) {
+		titleDates.set(title, date);
+	}
+}
+
+// Sort by date descending
+return Array.from(titleDates.entries())
+	.sort((a, b) => b[1].localeCompare(a[1]))
+	.map((entry) => entry[0]);
+```
+
+### Modal UX Refinements
+
+**Focus Delay** (main.ts:233):
+
+```typescript
+setTimeout(() => this.titleInput.focus(), 10);
+```
+
+- Delays focus by 10ms to allow modal to fully render
+- Fixes initial popover positioning (prevents 20px offset)
+- Ensures suggester calculates position correctly
+
+**Empty Input Handling** (main.ts:173-183):
+
+```typescript
+if (!query || query.trim().length === 0) {
+	return [];
+}
+```
+
+- Prevents dropdown from appearing on modal open
+- Only shows suggestions when user starts typing
+- Matches standard autocomplete UX patterns
+
+**Enter Key Handling** (main.ts:221-225):
+
+- AbstractInputSuggest intercepts Enter when suggestions are active
+- Our handler only fires when no suggestions showing
+- Submits form when input has content
+- `!evt.isComposing` check handles IME input correctly
+
+## Key Design Decisions
+
+### 1. Why AbstractInputSuggest?
+
+**Decision**: Use Obsidian's `AbstractInputSuggest` API instead of custom implementation
+
+**Rationale**:
+
+- Initial implementation used manual dropdown with ~210 lines of code
+- Research revealed Obsidian provides built-in suggestion API
+- Refactored to ~95 lines total (55% code reduction)
+- Better theme compatibility (uses CSS variables)
+- Improved accessibility (ARIA attributes, focus management)
+- Reduced maintenance burden
+
+**Trade-offs**:
+
+- Slightly less control over UI details
+- Depends on Obsidian API stability (mitigated: API stable since v1.4.10)
+
+### 2. Why Recency-Based Sorting?
+
+**Decision**: Sort autocomplete suggestions by most recent use, not alphabetically
+
+**Rationale**:
+
+- PKM workflow often revisits same topics over time
+- Most recent context is usually most relevant
+- User can quickly find "Team Meeting" without scrolling past "A-Z" topics
+- Supports temporal organization of knowledge
+
+**Implementation**:
+
+- Track date for each title during scan
+- Keep newest date when title appears multiple times
+- Sort descending before filtering
+
+### 3. Why YYYY/MM/ Folder Structure?
+
+**Decision**: Organize notes in year/month subfolders, not flat or daily folders
+
+**Alternatives Considered**:
+
+- Flat structure: Doesn't scale (hundreds of files)
+- YYYY/MM/DD/: Too deep (empty folders for days without notes)
+- YYYY/Qn/: Less intuitive (quarters vs. months)
+
+**Chosen Approach**:
+
+- `YYYY/MM/` strikes balance between organization and depth
+- ~31 files per folder maximum
+- Matches calendar-based thinking
+- Supports future features (monthly reviews, date range queries)
+
+### 4. Why YYYY-MM-DD Date Format?
+
+**Decision**: Use ISO 8601 date format in filenames
+
+**Rationale**:
+
+- Sortable: String comparison equals chronological order
+- Unambiguous: No month/day confusion
+- International standard
+- Fixed width: Predictable parsing
+
+### 5. Why Open Existing Note on Duplicate?
+
+**Decision**: When note with same date+title exists, open it instead of creating
+
+**Alternatives Considered**:
+
+- Add number suffix (-2, -3): Confusing, implies versions
+- Show error: Frustrating user experience
+- Merge content: Complex, destructive
+
+**Chosen Approach**:
+
+- Same topic on same day likely represents single context
+- Opening existing note avoids fragmentation
+- User sees Notice indicating existing note was opened
+- Can manually create date+title+suffix if truly needed
+
+### 6. Why Optional Template Support?
+
+**Decision**: Allow users to specify template file path in settings
+
+**Rationale**:
+
+- Flexibility: Users with templates benefit, others use blank notes
+- Consistency: Template ensures uniform note structure
+- Simple implementation: Just read file and use content
+- Graceful degradation: Falls back to empty if template missing
 
 ## Build Pipeline
 
@@ -87,18 +349,20 @@ Plugin Active in Vault
 
 ## npm Scripts
 
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Development mode with file watching and inline source maps |
-| `npm run build` | Production build (minified, type-checked) |
-| `npm run version` | Auto-bump version in manifest.json and versions.json |
+| Command           | Purpose                                                    |
+| ----------------- | ---------------------------------------------------------- |
+| `npm run dev`     | Development mode with file watching and inline source maps |
+| `npm run build`   | Production build (minified, type-checked)                  |
+| `npm run version` | Auto-bump version in manifest.json and versions.json       |
 
 ## Dependencies
 
 ### Production Dependencies
+
 None - all code is bundled into `main.js`
 
 ### Development Dependencies
+
 - `obsidian@latest` - Obsidian API type definitions and runtime
 - `typescript@5.9.3` - TypeScript compiler
 - `esbuild@0.25.11` - Fast JavaScript bundler
@@ -111,6 +375,7 @@ None - all code is bundled into `main.js`
 ## Development Guidelines
 
 See `AGENTS.md` for comprehensive development guidelines including:
+
 - Code organization best practices
 - Recommended project structure for production plugins
 - Obsidian API patterns and conventions
@@ -124,31 +389,133 @@ See `AGENTS.md` for comprehensive development guidelines including:
 2. Build production bundle: `npm run build`
 3. Commit changes with version tag
 4. Create GitHub release with artifacts:
-   - `main.js` (compiled plugin)
-   - `manifest.json` (plugin metadata)
-   - `styles.css` (if used)
+    - `main.js` (compiled plugin)
+    - `manifest.json` (plugin metadata)
+    - `styles.css` (if used)
+
+## Installation
+
+**Development/Testing**:
+
+1. Build the plugin: `npm run build`
+2. Copy to vault: `.obsidian/plugins/hunter-pkm/`
+    - Copy `main.js`
+    - Copy `manifest.json`
+    - Copy `styles.css`
+3. Enable in Obsidian: Settings → Community Plugins → Hunter's PKM - Quick Notes
+
+**Production** (when published):
+
+- Install from Obsidian Community Plugins browser
+
+## Usage
+
+### Creating a Quick Note
+
+1. **Trigger creation**:
+    - Click file-plus icon in ribbon (left sidebar), OR
+    - Open command palette (Cmd/Ctrl+P) → "Create quick note", OR
+    - Use custom hotkey (if configured)
+
+2. **Enter title**:
+    - Type in the title field
+    - Autocomplete suggestions appear as you type
+    - Use ↑↓ arrows to navigate suggestions
+    - Press Enter or click to select suggestion
+
+3. **Create note**:
+    - Press Enter or click "Create" button
+    - Note created at: `Notes/2025/10/2025-10-26 Your Title.md`
+    - Note opens immediately in editor
+
+### Configuring Settings
+
+Settings → Plugin Options → Hunter's PKM - Quick Notes
+
+- **Base folder**: Folder where notes are created (default: "Notes")
+    - Notes will be organized in YYYY/MM/ subfolders within this base
+- **Template file**: Path to template file (optional)
+    - Example: `Templates/note-template.md`
+    - Leave empty for blank notes
 
 ## Next Steps / Future Development
 
-This project is ready for custom PKM feature development. Potential areas to explore:
+### Current Status
 
-- Define specific PKM workflows to support
-- Design plugin architecture (consider refactoring into modular structure)
-- Implement core features
-- Add testing infrastructure
-- Update styles.css for custom UI elements
-- Document user-facing features in README.md
+- ✅ Quick note capture feature complete
+- ✅ Autocomplete with recency sorting working
+- ✅ Folder organization implemented
+- ✅ Template support functional
+- ✅ Settings UI complete
+
+### Potential Enhancements
+
+**Near-term**:
+
+- Add tag autocomplete (suggest tags from past notes)
+- Support for note aliases (multiple titles for same note)
+- Quick switcher integration (jump to notes by topic)
+- Configurable date format in settings
+
+**Medium-term**:
+
+- Daily note integration (link quick notes to daily notes)
+- Topic-based views (see all notes for a given title)
+- Statistics dashboard (notes per topic, activity heatmap)
+- Batch operations (rename topics, merge notes)
+
+**Long-term**:
+
+- Graph view by topic (visualize topic relationships)
+- Smart templates (template selection based on title/tags)
+- AI-powered suggestions (suggest related topics)
+- Export features (topic summaries, timelines)
+
+### Code Organization Improvements
+
+- Refactor into separate files (classes/, modals/, utils/)
+- Add unit tests (Jest or Vitest)
+- Add integration tests for note creation workflow
+- Implement error handling/recovery for file operations
+- Add logging for debugging
 
 ## Context for AI Assistants
 
 This file serves as a reference for future AI assistant sessions. When starting a new conversation:
 
-1. The plugin is currently in **template/starter state**
-2. All functionality in `main.ts` is sample code from the Obsidian plugin template
-3. Actual PKM features have not been implemented yet
-4. Project structure follows standard Obsidian plugin conventions
-5. Refer to `AGENTS.md` for detailed development best practices
+### Current State
+
+1. **Quick Notes feature is implemented and functional**
+2. Core functionality in `main.ts` (~287 lines):
+    - `QuickNotePlugin`: Main plugin class with note creation logic
+    - `TitleSuggest`: Autocomplete using `AbstractInputSuggest`
+    - `TitleInputModal`: Note creation modal
+    - `QuickNoteSettingTab`: Settings interface
+3. **Project structure follows standard Obsidian plugin conventions**
+4. **Refer to `AGENTS.md` for detailed development best practices**
+
+### Implementation Highlights
+
+- Uses Obsidian's `AbstractInputSuggest` for autocomplete (not custom implementation)
+- Autocomplete suggestions sorted by recency (most recent first)
+- Notes organized in `{baseFolder}/YYYY/MM/YYYY-MM-DD Title.md` format
+- Template support optional, gracefully falls back to empty notes
+- Duplicate detection opens existing note instead of creating
+
+### Design Patterns
+
+- Clean separation of concerns (Plugin, Suggester, Modal, Settings)
+- Uses Obsidian API best practices (normalizePath, TFile/TFolder abstractions)
+- Minimal inline styling (relies on Obsidian CSS variables)
+- Defensive programming (null checks, error handling)
+
+### Key Files
+
+- `main.ts`: All plugin code (consider refactoring to separate files for larger features)
+- `manifest.json`: Plugin metadata (remember to update on version bumps)
+- `PROJECT.md`: This file (update when adding major features)
+- `AGENTS.md`: Development guidelines (reference for coding standards)
 
 ---
 
-*Last Updated: 2025-10-26*
+_Last Updated: 2025-10-26_
