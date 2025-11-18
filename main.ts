@@ -1,4 +1,15 @@
-import { AbstractInputSuggest, App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, normalizePath } from 'obsidian';
+import {
+	AbstractInputSuggest,
+	App,
+	Modal,
+	Notice,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+	TFile,
+	TFolder,
+	normalizePath,
+} from "obsidian";
 
 interface QuickNoteSettings {
 	baseFolder: string;
@@ -6,9 +17,9 @@ interface QuickNoteSettings {
 }
 
 const DEFAULT_SETTINGS: QuickNoteSettings = {
-	baseFolder: 'Notes',
-	templatePath: ''
-}
+	baseFolder: "Notes",
+	templatePath: "",
+};
 
 export default class QuickNotePlugin extends Plugin {
 	settings: QuickNoteSettings;
@@ -17,17 +28,17 @@ export default class QuickNotePlugin extends Plugin {
 		await this.loadSettings();
 
 		// Add ribbon icon for quick note creation
-		this.addRibbonIcon('file-plus', 'Create quick note', () => {
+		this.addRibbonIcon("file-plus", "Create quick note", () => {
 			this.createQuickNote();
 		});
 
 		// Add command for note creation
 		this.addCommand({
-			id: 'create-quick-note',
-			name: 'Create quick note',
+			id: "create-quick-note",
+			name: "Create quick note",
 			callback: () => {
 				this.createQuickNote();
-			}
+			},
 		});
 
 		// Add settings tab
@@ -38,7 +49,7 @@ export default class QuickNotePlugin extends Plugin {
 		// Map of title -> most recent date (YYYY-MM-DD format)
 		const titleDates = new Map<string, string>();
 		const baseFolder = this.app.vault.getAbstractFileByPath(
-			normalizePath(this.settings.baseFolder)
+			normalizePath(this.settings.baseFolder),
 		);
 
 		if (!baseFolder) {
@@ -50,7 +61,7 @@ export default class QuickNotePlugin extends Plugin {
 
 		const extractTitles = (folder: TFolder) => {
 			for (const child of folder.children) {
-				if (child instanceof TFile && child.extension === 'md') {
+				if (child instanceof TFile && child.extension === "md") {
 					const fileName = child.basename;
 					const match = fileName.match(datePattern);
 
@@ -78,7 +89,7 @@ export default class QuickNotePlugin extends Plugin {
 		// Sort by date descending (most recent first), then return just titles
 		return Array.from(titleDates.entries())
 			.sort((a, b) => b[1].localeCompare(a[1])) // Compare dates, reverse order
-			.map(entry => entry[0]); // Extract just the titles
+			.map((entry) => entry[0]); // Extract just the titles
 	}
 
 	async createQuickNote() {
@@ -94,15 +105,18 @@ export default class QuickNotePlugin extends Plugin {
 
 				// Create folder path: baseFolder/YYYY/MM/
 				const year = now.getFullYear().toString();
-				const month = (now.getMonth() + 1).toString().padStart(2, '0');
-				const folderPath = normalizePath(`${this.settings.baseFolder}/${year}/${month}`);
+				const month = (now.getMonth() + 1).toString().padStart(2, "0");
+				const folderPath = normalizePath(
+					`${this.settings.baseFolder}/${year}/${month}`,
+				);
 
 				// Create filename: YYYY-MM-DD Title.md
 				const fileName = `${dateStr} ${title}.md`;
 				const filePath = normalizePath(`${folderPath}/${fileName}`);
 
 				// Check if file already exists
-				const existingFile = this.app.vault.getAbstractFileByPath(filePath);
+				const existingFile =
+					this.app.vault.getAbstractFileByPath(filePath);
 				if (existingFile instanceof TFile) {
 					// File exists, open it
 					await this.app.workspace.getLeaf().openFile(existingFile);
@@ -124,7 +138,7 @@ export default class QuickNotePlugin extends Plugin {
 
 				new Notice(`Created note: ${title}`);
 			} catch (error) {
-				console.error('Error creating quick note:', error);
+				console.error("Error creating quick note:", error);
 				new Notice(`Failed to create note: ${error.message}`);
 			}
 		}).open();
@@ -132,8 +146,8 @@ export default class QuickNotePlugin extends Plugin {
 
 	formatDate(date: Date): string {
 		const year = date.getFullYear();
-		const month = (date.getMonth() + 1).toString().padStart(2, '0');
-		const day = date.getDate().toString().padStart(2, '0');
+		const month = (date.getMonth() + 1).toString().padStart(2, "0");
+		const day = date.getDate().toString().padStart(2, "0");
 		return `${year}-${month}-${day}`;
 	}
 
@@ -145,18 +159,20 @@ export default class QuickNotePlugin extends Plugin {
 	}
 
 	async getNoteContent(title: string, date: string): Promise<string> {
-		let content = '';
+		let content = "";
 
 		// If template path is configured, try to load it
 		if (this.settings.templatePath) {
 			const templateFile = this.app.vault.getAbstractFileByPath(
-				normalizePath(this.settings.templatePath)
+				normalizePath(this.settings.templatePath),
 			);
 
 			if (templateFile instanceof TFile) {
 				content = await this.app.vault.read(templateFile);
 			} else {
-				console.warn(`Template file not found: ${this.settings.templatePath}`);
+				console.warn(
+					`Template file not found: ${this.settings.templatePath}`,
+				);
 			}
 		}
 
@@ -166,7 +182,7 @@ export default class QuickNotePlugin extends Plugin {
 
 	addFrontmatter(content: string, title: string, date: string): string {
 		// Check if content already has frontmatter
-		const hasFrontmatter = content.trimStart().startsWith('---');
+		const hasFrontmatter = content.trimStart().startsWith("---");
 
 		if (hasFrontmatter) {
 			// Extract existing frontmatter and content
@@ -199,7 +215,8 @@ export default class QuickNotePlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = await this.loadData();
+		return { ...DEFAULT_SETTINGS, ...data };
 	}
 
 	async saveSettings() {
@@ -208,7 +225,7 @@ export default class QuickNotePlugin extends Plugin {
 }
 
 class TitleSuggest extends AbstractInputSuggest<string> {
-	private pastTitles: string[];
+	private readonly pastTitles: string[];
 
 	constructor(app: App, inputEl: HTMLInputElement, pastTitles: string[]) {
 		super(app, inputEl);
@@ -222,8 +239,8 @@ class TitleSuggest extends AbstractInputSuggest<string> {
 		}
 
 		const lowerQuery = query.toLowerCase();
-		return this.pastTitles.filter(title =>
-			title.toLowerCase().includes(lowerQuery)
+		return this.pastTitles.filter((title) =>
+			title.toLowerCase().includes(lowerQuery),
 		);
 	}
 
@@ -243,7 +260,11 @@ class TitleInputModal extends Modal {
 	titleSuggest: TitleSuggest;
 	pastTitles: string[];
 
-	constructor(app: App, pastTitles: string[], onSubmit: (title: string) => void) {
+	constructor(
+		app: App,
+		pastTitles: string[],
+		onSubmit: (title: string) => void,
+	) {
 		super(app);
 		this.pastTitles = pastTitles;
 		this.onSubmit = onSubmit;
@@ -253,23 +274,27 @@ class TitleInputModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 
-		contentEl.createEl('h2', { text: 'Create quick note' });
+		contentEl.createEl("h2", { text: "Create quick note" });
 
 		const inputContainer = contentEl.createDiv();
-		inputContainer.createEl('label', { text: 'Note title:' });
+		inputContainer.createEl("label", { text: "Note title:" });
 
-		this.titleInput = inputContainer.createEl('input', {
-			type: 'text',
-			placeholder: 'Enter note title...'
+		this.titleInput = inputContainer.createEl("input", {
+			type: "text",
+			placeholder: "Enter note title...",
 		});
-		this.titleInput.style.width = '100%';
+		this.titleInput.style.width = "100%";
 
 		// Attach autocomplete suggester
-		this.titleSuggest = new TitleSuggest(this.app, this.titleInput, this.pastTitles);
+		this.titleSuggest = new TitleSuggest(
+			this.app,
+			this.titleInput,
+			this.pastTitles,
+		);
 
 		// Handle Enter key to submit form
-		this.titleInput.addEventListener('keydown', (evt: KeyboardEvent) => {
-			if (evt.key === 'Enter' && !evt.isComposing) {
+		this.titleInput.addEventListener("keydown", (evt: KeyboardEvent) => {
+			if (evt.key === "Enter" && !evt.isComposing) {
 				this.submit();
 			}
 		});
@@ -278,16 +303,20 @@ class TitleInputModal extends Modal {
 		setTimeout(() => this.titleInput.focus(), 10);
 
 		// Create buttons
-		const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
-
-		const cancelBtn = buttonContainer.createEl('button', { text: 'Cancel' });
-		cancelBtn.addEventListener('click', () => this.close());
-
-		const createBtn = buttonContainer.createEl('button', {
-			text: 'Create',
-			cls: 'mod-cta'
+		const buttonContainer = contentEl.createDiv({
+			cls: "modal-button-container",
 		});
-		createBtn.addEventListener('click', () => this.submit());
+
+		const cancelBtn = buttonContainer.createEl("button", {
+			text: "Cancel",
+		});
+		cancelBtn.addEventListener("click", () => this.close());
+
+		const createBtn = buttonContainer.createEl("button", {
+			text: "Create",
+			cls: "mod-cta",
+		});
+		createBtn.addEventListener("click", () => this.submit());
 	}
 
 	submit() {
@@ -296,7 +325,7 @@ class TitleInputModal extends Modal {
 			this.onSubmit(title);
 			this.close();
 		} else {
-			new Notice('Please enter a note title');
+			new Notice("Please enter a note title");
 		}
 	}
 
@@ -319,30 +348,38 @@ class QuickNoteSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: 'Quick Note Settings' });
+		containerEl.createEl("h2", { text: "Quick Note Settings" });
 
 		// Base folder setting
 		new Setting(containerEl)
-			.setName('Base folder')
-			.setDesc('Folder where notes will be created (notes will be organized in YYYY/MM/ subfolders)')
-			.addText(text => text
-				.setPlaceholder('Notes')
-				.setValue(this.plugin.settings.baseFolder)
-				.onChange(async (value) => {
-					this.plugin.settings.baseFolder = value || 'Notes';
-					await this.plugin.saveSettings();
-				}));
+			.setName("Base folder")
+			.setDesc(
+				"Folder where notes will be created (notes will be organized in YYYY/MM/ subfolders)",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("Notes")
+					.setValue(this.plugin.settings.baseFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.baseFolder = value || "Notes";
+						await this.plugin.saveSettings();
+					}),
+			);
 
 		// Template file setting
 		new Setting(containerEl)
-			.setName('Template file')
-			.setDesc('Optional: Path to a template file to use for new notes (leave empty for blank notes)')
-			.addText(text => text
-				.setPlaceholder('Templates/note-template.md')
-				.setValue(this.plugin.settings.templatePath)
-				.onChange(async (value) => {
-					this.plugin.settings.templatePath = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Template file")
+			.setDesc(
+				"Optional: Path to a template file to use for new notes (leave empty for blank notes)",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("Templates/note-template.md")
+					.setValue(this.plugin.settings.templatePath)
+					.onChange(async (value) => {
+						this.plugin.settings.templatePath = value;
+						await this.plugin.saveSettings();
+					}),
+			);
 	}
 }
